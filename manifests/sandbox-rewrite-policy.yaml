@@ -1,0 +1,40 @@
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingAdmissionPolicy
+metadata:
+  name: "sandbox-rewrite-policy"
+spec:
+  matchConstraints:
+    resourceRules:
+    - apiGroups: ["agents.x-k8s.io"]
+      apiVersions: ["v1alpha1"]
+      operations: ["CREATE"]
+      resources: ["sandboxes"]
+  reinvocationPolicy: IfNeeded
+  matchConditions:
+  - name: is-sandbox-vm
+    expression: "has(object.spec.podTemplate.spec.runtimeClassName) && object.spec.podTemplate.spec.runtimeClassName == 'sandboxvm'"
+  mutations:
+  - patchType: "JSONPatch"
+    jsonPatch:
+      expression: >
+        [
+          JSONPatch{
+            op: "replace",
+            path: "/spec/podTemplate/spec/containers",
+            value: [
+              {
+                "name": "pause-container",
+                "image": "registry.k8s.io/pause:3.10"
+              }
+            ]
+          }
+        ]
+---
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: "sandbox-rewrite-policy-binding"
+spec:
+  policyName: "sandbox-rewrite-policy"
+  matchResources:
+    namespaceSelector: {} # Match all namespaces
